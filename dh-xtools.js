@@ -362,7 +362,6 @@
 			listener.regist(['x', 'y', 'type'], (newVal, oldVal, diff) => {
 				let { x, y, type } = newVal;
 
-				console.log(x, y, type)
 				let charts = charts_list.filter(c => WidgetBlackBox.Judge(x, y, c.judge)).map(c => {
 					return { type: c.type, weight: c.weight * WidgetBlackBox.CalWeights(x, y, c.judge) }
 				});
@@ -387,20 +386,53 @@
 			}
 		}
 
+		static Create2(defaultVal){
 
+			let charts_list = Object.keys(CHARTS_XY).map(k => ({
+				type: k,
+				judge: CHARTS_XY[k].judge, weight: (CHARTS_XY[k].weight || 1)
+			}));
 
+			let listener = StateListener.Create(defaultVal);
 
-		// constructor(val){
-		// 	this.listener = StateListener.Create(val);
-		// }
+			let CALLBACK = null;
+			listener.regist(['x', 'y', 'type'], (newVal, oldVal, diff) => {
 
-		// regist(keys, callback){
-		// 	this.listener.regist(keys, callback);
-		// }
+				let { x, y, type } = newVal;
 
-		// set(v){
-		// 	this.listener.set(v);
-		// }
+				let charts = charts_list.filter(c => WidgetBlackBox.Judge(x, y, c.judge)).map(c => {
+					return { type: c.type, weight: c.weight * WidgetBlackBox.CalWeights(x, y, c.judge) }
+				});
+				let charts_no = charts_list.filter(c => !charts.some(cc => cc.type === c.type));
+
+				charts.sort((a, b) => {
+					return b.weight - a.weight;
+				});
+
+				charts = charts.map(c => c.type);
+				charts_no = charts_no.map(c => c.type);
+				
+				let r = {
+					type: type || charts[0],
+					yes: charts,
+					no: charts_no
+				};
+
+				if(T.fun(CALLBACK)){
+					CALLBACK(r);
+				}
+
+				return r;
+			});
+
+			return {
+				listen(cb, x, y, type){
+					CALLBACK = cb;
+					listen.set({ x, y, type });
+				}
+			}
+
+		}
 
 	}
 
