@@ -1,16 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title></title>
-<script type="text/javascript" src="dh-xtools.js"></script>
-</head>
-<body>
-
-<h1>Look at console</h1>
-
-<script type="text/javascript">
-
-let DATA = {
+{
   "Bar": {
     "title": "柱状图",
     "desc": [ "2个以内维度", "1个或多个度量"],
@@ -76,19 +64,4 @@ let DATA = {
     "desc": [ "1个或2个维度", "1个或2个度量"],
     "judge": [[1, 1, 1, 2]]
   }
-};
-
-let bb = new DHXTools.WidgetBlackBox(DATA);
-
-let lis = bb.create({ x: 0, y: 0, type: null });
-
-lis.listen(0, 1, null, function(conf){
-	console.log(conf);
-})
-
-
-
-
-</script>
-</body>
-</html>
+}

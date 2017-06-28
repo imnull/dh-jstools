@@ -1,27 +1,127 @@
 ((host, factory) => {
-
-	let DHXTools = {};
-	factory(DHXTools);
-	if(exports == 'object' && typeof module != 'undefined'){
-		exports.DHXTools = DHXTools;
-	} else if(host.constructor.name == 'Window'){
-		host.DHXTools = DHXTools;
-	}
-
+	typeof exports == 'object' && typeof module != 'undefined'
+		? factory(exports)
+		: host.constructor.name == 'Window' ? factory((host.DHXTools = {})) : factory(host)
+		;
 })(this, (exports) => {
 
 	const os = Object.prototype.toString;
 
-	const T = {
-		obj: v => v && os.call(v) == '[object Object]',
-		arr: v => v && os.call(v) == '[object Array]',
-		fun: v => typeof(v) == 'function',
-		str: v => typeof(v) == 'string'
-	};
-
 	let ID = 0;
+	const GetId = function GetId(){ return ++ID; }
 
-	function GetId(){ return ++ID; }
+	class Type{
+
+		static ostr(v){ return os.call(v); }
+		static tstr(v){ return typeof(v); }
+
+		static IsObject(v){ return Type.ostr(v) == '[object Object]'; }
+		static IsArray(v){ return Type.ostr(v) == '[object Array]'; }
+		static IsFunction(v){ return typeof(v) == 'function'; }
+		static IsString(v){ return typeof(v) == 'string'; }
+		static IsNumber(v){ return typeof(v) == 'number' && !isNaN(v); }
+		static IsBoolean(v){ return typeof(v) == 'boolean'; }
+		static IsNil(v){ return v === undefined || v === null; }
+		static IsLiteral(v){
+			return Type.IsNil(v)
+				|| Type.IsNumber(v)
+				|| Type.IsBoolean(v)
+				|| Type.IsString(v)
+				;
+		}
+
+		static obj(v){ return Type.IsObject(v) }
+		static arr(v){ return Type.IsArray(v) }
+		static fun(v){ return Type.IsFunction(v) }
+		static str(v){ return Type.IsString(v) }
+		static num(v){ return Type.IsNumber(v) }
+		static nil(v){ return Type.IsNil(v) }
+		static boo(v){ return Type.IsBoolean(v) }
+		static lit(v){ return Type.IsLiteral(v) }
+
+		static GetTypeName(v){
+			if(v === null){
+				return 'null';
+			} else if(v === undefined){
+				return 'undefined';
+			} else {
+				return v.constructor.name.toLowerCase();
+			}
+		}
+	}
+
+	class AnalyzerItem {
+		constructor(){
+			this.path = [];
+			this.type = null;
+		}
+	}
+
+	class Analyzer{
+
+
+
+		static ObjectWalker(o, key, cb, depth = 0){
+			let type = Type.GetTypeName(o);
+			cb(o, key, type, depth);
+			switch(type){
+				case 'object':
+					Object.keys(o).forEach(key => {
+						Analyzer.ObjectWalker(o[key], key, cb, depth + 1);
+					});
+					break;
+				case 'array':
+					o.forEach((val, i) => {
+						Analyzer.ObjectWalker(val, i, cb, depth + 1);
+					})
+					break;
+				default:
+					break;
+			}
+		}
+
+		static Map(v, depth = 0, path = [], list = []){
+			let type = Type.GetTypeName(v);
+			let children = null;
+			switch(type){
+				case 'object':
+					children = {};
+					let p = path.slice(0);
+					Object.keys(v).forEach(key => {
+						let p = path.slice(0);
+						p.push(key);
+						children[key] = Analyzer.Map(v[key], depth + 1, p, list);
+					})
+					break;
+				case 'array':
+					children = {};
+					v.forEach((val, key) => {
+						let p = path.slice(0);
+						p.push(key);
+						children[key] = Analyzer.Map(v[key], depth + 1, p, list);
+					})
+					break;
+				default:
+					children = null;
+					break;
+			}
+			let r = { type, depth, path };
+			if(children != null){
+				r.children = children;
+			}
+			list.push(r);
+			return r
+		}
+	}
+
+	let data = { a: 1, c: { A:9,B:6 }, b: [1,2,3] };
+	let list = [];
+	let map = Analyzer.Map(data, 0, [], list);
+	console.log(map, list)
+
+	// Analyzer.Map(data, 'aaa', function(val, key, type, depth){
+	// 	console.log(...arguments)
+	// });
 
 	/* XArray */
 
@@ -143,11 +243,9 @@
 		 */
 		static Copy(a, b, overwrite = false){
 			for(let p in b){
-				if(p in a && !overwrite) continue;
-				a[p] = b[p];
+				if(overwrite || !(p in a)) a[p] = b[p];
 			}
 		}
-
 	}
 
 	class StateListener{
@@ -165,12 +263,12 @@
 
 		regist(keys, callback/*, value = {}*/){
 			
-			if(!T.fun(callback)){
+			if(!Type.fun(callback)){
 				console.warn('Fatal: Arguments[1] must be a function.');
 				return;
 			}
 
-			if(!T.arr(keys)) keys = [keys];
+			if(!Type.arr(keys)) keys = [keys];
 
 			keys = keys.map(n => n + '');
 
@@ -179,7 +277,7 @@
 				id: GetId(),
 				keys: keys,
 				callback: callback
-				// , value: T.obj(value) ? value : {}
+				// , value: Type.obj(value) ? value : {}
 			});
 			return r;
 		}
@@ -202,7 +300,7 @@
 		}
 
 		set(v){
-			if(!T.obj(v)){
+			if(!Type.obj(v)){
 				console.warn('Fatal: Arguments[0] must be a object.');
 				return;
 			}
@@ -215,7 +313,7 @@
 		}
 
 		update(v){
-			if(!T.obj(v)) return;
+			if(!Type.obj(v)) return;
 			XObject.Copy(this._value, v, true);
 
 			// for(let p in v) this._value[p] = v[p];
@@ -233,114 +331,12 @@
 		output(){
 			return XObject.Clone(this._value);
 		}
-
 	}
 
-	class WidgetBlackBox {
-		constructor(config) {
-			if (Object.prototype.toString.call(config) !== "[object Object]") {
-				throw new Error("Initialization value must be as an Object");
-			}
-			this.CHARTS_XY = config;
-		}
-		static RangeJudge(val, min, max) {
-			if(max < 0){
-				return val >= min;
-			} else {
-				return val >= min && val <= max;
-			}
-		}
 
-		static MatrixJudge(x, y, mat) {
-			return WidgetBlackBox.RangeJudge(x, mat[0], mat[1]) &&
-				WidgetBlackBox.RangeJudge(y, mat[2], mat[3]);
-		}
-		static Judge(x, y, mats) {
-			return mats.some(mat => WidgetBlackBox.MatrixJudge(x, y, mat))
-		}
-
-		static CalWeight(x, y, mat) {
-			const INFI = 10;
-
-			let wx = x;
-			let wy = y;
-			if(mat[1] < 0){
-				wx /= INFI;
-			} else {
-				wx /= mat[1] - mat[0] + 1;
-			}
-
-			if(mat[3] < 0){
-				wy /= INFI;
-			} else {
-				wy /= mat[3] - mat[2] + 1;
-			}
-
-			return wx * wy;
-		}
-
-		static CalWeights(x, y, mats) {
-			let n = 0;
-			mats.forEach(mat => {
-				n += WidgetBlackBox.CalWeight(x, y, mat);
-			});
-			return n / mats.length;
-		}
-
-		create(defaultVal) {
-			const CHARTS_XY = this.CHARTS_XY;
-			let charts_list = Object.keys(CHARTS_XY).map(k => ({
-				type: k,
-				judge: CHARTS_XY[k].judge, weight: (CHARTS_XY[k].weight || 1)
-			}));
-
-			let listener = StateListener.Create(defaultVal);
-
-			let CALLBACK = null;
-			listener.regist(['x', 'y', 'type'], (newVal, oldVal, diff) => {
-
-				let { x, y, type } = newVal;
-
-				let charts = charts_list.filter(c => WidgetBlackBox.Judge(x, y, c.judge)).map(c => {
-					return { type: c.type, weight: c.weight * WidgetBlackBox.CalWeights(x, y, c.judge) }
-				});
-				let charts_no = charts_list.filter(c => !charts.some(cc => cc.type === c.type));
-
-				charts.sort((a, b) => {
-					return b.weight - a.weight;
-				});
-
-				charts = charts.map(c => c.type);
-				charts_no = charts_no.map(c => c.type);
-				
-				let r = {
-					type: type || charts[0],
-					yes: charts,
-					no: charts_no
-				};
-
-				if(T.fun(CALLBACK)){
-					CALLBACK(r);
-				}
-
-				return r;
-			});
-
-			return {
-				listen(x, y, type, cb){
-					CALLBACK = cb;
-					listener.set({ x, y, type });
-				}
-			}
-
-		}
-	}
-
+	exports.Type = Type;
 	exports.XArray = XArray;
 	exports.XObject = XObject;
 	exports.StateListener = StateListener;
-	exports.Type = T;
-	exports.GetId = GetId;
-	exports.WidgetBlackBox = WidgetBlackBox;
 
 });
